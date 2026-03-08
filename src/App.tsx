@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ChevronRight, Database, Settings, Play, BarChart2, RefreshCw, HelpCircle, 
   Info, AlertTriangle, CheckCircle2, ArrowRight, Layers, Cpu, Zap, 
-  TrendingUp, Target, Activity, Microscope, BookOpen, Github
+  TrendingUp, Target, Activity, Microscope, BookOpen, Github, RotateCcw
 } from 'lucide-react';
 import { ALGORITHMS, AlgorithmInfo, Dataset, Hyperparameter, HistoryItem } from './types';
 import { FULL_DATASETS } from './datasets';
@@ -26,7 +26,7 @@ export default function App() {
   const [features, setFeatures] = useState<string[]>([]);
   const [target, setTarget] = useState<string>('');
   const [splitRatio, setSplitRatio] = useState(0.8);
-  const [scaling, setScaling] = useState(false);
+  const [scaling, setScaling] = useState(true);
   const [isCrossValidation, setIsCrossValidation] = useState(false);
   const [kFolds, setKFolds] = useState(5);
   const [hyperparams, setHyperparams] = useState<Record<string, number>>({});
@@ -139,7 +139,10 @@ export default function App() {
     setTrainEvaluation(null);
     setPrediction(null);
     setHyperparams({});
-    setScaling(false);
+    setScaling(true);
+    setSplitRatio(0.8);
+    setKFolds(5);
+    setIsCrossValidation(false);
     setFeatureImportance(null);
     setDecisionBoundary(null);
     setComparisonModels([]);
@@ -148,6 +151,12 @@ export default function App() {
 
   const handleAlgoSelect = (algo: AlgorithmInfo) => {
     setSelectedAlgo(algo);
+    // Set default hyperparams
+    const defaults: Record<string, any> = {};
+    algo.hyperparameters?.forEach(hp => {
+      defaults[hp.id] = hp.default;
+    });
+    setHyperparams(defaults);
     setStep(1);
   };
 
@@ -956,7 +965,7 @@ export default function App() {
                   Back to Pipeline
                 </button>
                 <button onClick={reset} className="flex items-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold text-sm hover:bg-black/80 transition-colors">
-                  <RefreshCw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4" />
                   Reset Lab
                 </button>
               </div>
@@ -1360,42 +1369,6 @@ export default function App() {
               </div>
               
               <div className="lg:col-span-1 space-y-8">
-                {/* Hyperparameter Playground */}
-                <div className="bg-white p-8 rounded-3xl border border-black/5 shadow-sm">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Settings className="text-emerald-600" />
-                    <h3 className="text-xl font-bold">Hyperparameter Playground</h3>
-                  </div>
-                  <div className="space-y-6">
-                    {selectedAlgo.hyperparameters?.map(h => (
-                      <div key={h.id}>
-                        <div className="flex justify-between mb-2">
-                          <span className="text-xs font-bold text-black/60">{h.name}</span>
-                          <span className="text-xs font-mono font-bold text-emerald-600">{hyperparams[h.id] || h.default}</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min={h.min} 
-                          max={h.max} 
-                          step={h.step} 
-                          value={hyperparams[h.id] || h.default} 
-                          onChange={(e) => setHyperparams({ ...hyperparams, [h.id]: parseFloat(e.target.value) })}
-                          className="w-full h-2 bg-emerald-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-                        />
-                        <p className="text-[10px] text-black/40 mt-1">{h.description}</p>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={handleTrain}
-                      disabled={isTraining}
-                      className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isTraining ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                      Retrain Model
-                    </button>
-                  </div>
-                </div>
-
                 <div className="bg-white p-8 rounded-3xl border border-black/5 shadow-sm">
                   <div className="flex items-center gap-2 mb-6">
                     <Play className="text-emerald-600 w-5 h-5" />
