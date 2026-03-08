@@ -16,8 +16,8 @@ export const DataExploration: React.FC<DataExplorationProps> = ({ dataset }) => 
   // Summary Stats
   const summary = features.map(f => {
     const values = data.map(d => parseFloat(d[f])).filter(v => !isNaN(v));
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+    const min = values.length > 0 ? Math.min(...values) : 0;
+    const max = values.length > 0 ? Math.max(...values) : 0;
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
     const missing = data.length - values.length;
     return { feature: f, min, max, mean, missing };
@@ -60,8 +60,8 @@ export const DataExploration: React.FC<DataExplorationProps> = ({ dataset }) => 
             {features.slice(0, 3).map(f => {
               const values = data.map(d => parseFloat(d[f])).filter(v => !isNaN(v));
               const bins = 10;
-              const min = Math.min(...values);
-              const max = Math.max(...values);
+              const min = values.length > 0 ? Math.min(...values) : 0;
+              const max = values.length > 0 ? Math.max(...values) : 0;
               const step = (max - min) / bins;
               const histogram = Array.from({ length: bins }, (_, i) => {
                 const start = min + i * step;

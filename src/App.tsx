@@ -58,7 +58,7 @@ export default function App() {
   const [isComparisonMode, setIsComparisonMode] = useState(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   }, [step, showHistory, showAbout]);
 
   useEffect(() => {
@@ -161,97 +161,123 @@ export default function App() {
     if (!selectedDataset || !selectedAlgo) return;
     setIsTraining(true);
     
-    // Reset previous results
-    setTrainedModel(null);
-    setEvaluation(null);
-    setTrainEvaluation(null);
-    setCVResults(null);
-    setROCData(null);
-    setLearningCurveData(null);
-    setBiasVarianceData(null);
-    setTreeData(null);
-    setKMeansHistory([]);
-    setCurrentKMeansStep(0);
+    try {
+      // Reset previous results
+      setTrainedModel(null);
+      setEvaluation(null);
+      setTrainEvaluation(null);
+      setCVResults(null);
+      setROCData(null);
+      setLearningCurveData(null);
+      setBiasVarianceData(null);
+      setTreeData(null);
+      setKMeansHistory([]);
+      setCurrentKMeansStep(0);
 
-    const data = selectedDataset.data;
-    const shuffled = [...data].sort(() => Math.random() - 0.5);
-    const splitIndex = Math.floor(shuffled.length * splitRatio);
-    const trainData = shuffled.slice(0, splitIndex);
-    const testData = shuffled.slice(splitIndex);
-
-    // K-Means Animation Data
-    if (selectedAlgo.id === 'kmeans') {
-      const numericData = data.map(row => features.map(f => parseFloat(row[f])));
-      const history = trainKMeansIterative(numericData, hyperparams.k || 3);
-      setKMeansHistory(history);
-      // We will animate this in Step 3
-    }
-
-    if (isCrossValidation && selectedAlgo.type !== 'Clustering') {
-      const cv = crossValidate(selectedAlgo.id, data, features, target, { ...hyperparams, scaling }, kFolds);
-      setCVResults(cv);
-    }
-
-    const startTime = performance.now();
-    const result = trainModel(selectedAlgo.id, trainData, features, target, { ...hyperparams, scaling });
-    const trainingTime = performance.now() - startTime;
-    setTrainedModel(result);
-
-    const evalResult = { ...evaluate(result, testData, features, target), trainingTime };
-    const trainEvalResult = evaluate(result, trainData, features, target);
-    setEvaluation(evalResult);
-    setTrainEvaluation(trainEvalResult);
-    
-    // Save to history
-    saveExperiment(evalResult);
-
-    if (selectedAlgo.type !== 'Clustering') {
-      const importance = getFeatureImportance(result);
-      setFeatureImportance(importance);
-
-      if (features.length === 2) {
-        const boundary = getDecisionBoundary(result, data, features);
-        setDecisionBoundary(boundary);
+      const data = selectedDataset.data;
+      if (!Array.isArray(data)) {
+        setIsTraining(false);
+        return;
       }
 
-      // Advanced Visualizations Data
-      const roc = generateROCData(result, testData, features, target);
-      setROCData(roc);
+      if (features.length === 0) {
+        setIsTraining(false);
+        alert('Please select at least one feature.');
+        return;
+      }
+      const shuffled = [...data].sort(() => Math.random() - 0.5);
+      const splitIndex = Math.floor(shuffled.length * splitRatio);
+      const trainData = shuffled.slice(0, splitIndex);
+      const testData = shuffled.slice(splitIndex);
 
-      const learningCurve = generateLearningCurveData(selectedAlgo.id, data, features, target, { ...hyperparams, scaling });
-      setLearningCurveData(learningCurve);
+      if (trainData.length === 0) {
+        setIsTraining(false);
+        alert('Training set is empty. Please check your data split ratio.');
+        return;
+      }
 
-      if (selectedAlgo.complexityParameter) {
-        const param = selectedAlgo.complexityParameter;
-        const h = selectedAlgo.hyperparameters?.find(x => x.id === param);
-        if (h) {
-          const values = Array.from({ length: 5 }, (_, i) => h.min + (i * (h.max - h.min) / 4));
-          const bv = generateBiasVarianceData(selectedAlgo.id, data, features, target, param, values);
-          setBiasVarianceData(bv);
+      // K-Means Animation Data
+      if (selectedAlgo.id === 'kmeans') {
+        const numericData = data.map(row => features.map(f => parseFloat(row[f])));
+        const history = trainKMeansIterative(numericData, hyperparams.k || 3);
+        setKMeansHistory(history);
+        // We will animate this in Step 3
+      }
+
+      if (isCrossValidation && selectedAlgo.type !== 'Clustering') {
+        const cv = crossValidate(selectedAlgo.id, data, features, target, { ...hyperparams, scaling }, kFolds);
+        setCVResults(cv);
+      }
+
+      const startTime = performance.now();
+      const result = trainModel(selectedAlgo.id, trainData, features, target, { ...hyperparams, scaling });
+      const trainingTime = performance.now() - startTime;
+      setTrainedModel(result);
+
+      const evalResult = { ...evaluate(result, testData, features, target), trainingTime };
+      const trainEvalResult = evaluate(result, trainData, features, target);
+      setEvaluation(evalResult);
+      setTrainEvaluation(trainEvalResult);
+      
+      // Save to history
+      saveExperiment(evalResult);
+
+      if (selectedAlgo.type !== 'Clustering') {
+        const importance = getFeatureImportance(result);
+        setFeatureImportance(importance);
+
+        if (features.length === 2) {
+          const boundary = getDecisionBoundary(result, data, features);
+          setDecisionBoundary(boundary);
         }
-      }
 
-      if (selectedAlgo.id === 'decision-tree') {
-        const tree = getTreeStructure(result.model);
-        setTreeData(tree);
-      }
+        // Advanced Visualizations Data
+        const roc = generateROCData(result, testData, features, target);
+        setROCData(roc);
 
-      // Add to comparison models
-      setComparisonModels(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          algoName: selectedAlgo.name,
-          datasetId: selectedDataset.id,
-          datasetName: selectedDataset.name,
-          metrics: evalResult,
-          hyperparams: { ...hyperparams }
+        const learningCurve = generateLearningCurveData(selectedAlgo.id, data, features, target, { ...hyperparams, scaling });
+        setLearningCurveData(learningCurve);
+
+        if (selectedAlgo.complexityParameter) {
+          const param = selectedAlgo.complexityParameter;
+          const h = selectedAlgo.hyperparameters?.find(x => x.id === param);
+          if (h) {
+            const values = Array.from({ length: 5 }, (_, i) => h.min + (i * (h.max - h.min) / 4));
+            const bv = generateBiasVarianceData(selectedAlgo.id, data, features, target, param, values);
+            setBiasVarianceData(bv);
+          }
         }
-      ]);
+
+        if (selectedAlgo.id === 'decision-tree') {
+          const tree = getTreeStructure(result.model);
+          setTreeData(tree);
+        }
+
+        // Add to comparison models
+        setComparisonModels(prev => [
+          ...prev,
+          {
+            id: Date.now(),
+            algoName: selectedAlgo.name,
+            datasetId: selectedDataset.id,
+            datasetName: selectedDataset.name,
+            metrics: evalResult,
+            hyperparams: { ...hyperparams }
+          }
+        ]);
+      }
+      
+      setStep(4);
+      // Force scroll to top after UI update
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    } catch (error) {
+      console.error('Training failed:', error);
+      alert('An error occurred during training. Please check your parameters and data.');
+    } finally {
+      setIsTraining(false);
     }
-    
-    setIsTraining(false);
-    setStep(4);
   };
 
   const handlePredict = () => {
@@ -476,50 +502,106 @@ export default function App() {
         ) : (
           <>
             {step === 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="mb-12">
-              <h2 className="text-4xl font-bold tracking-tight mb-4">Choose an Algorithm</h2>
-              <p className="text-black/60 max-w-2xl">Select a machine learning algorithm to begin your interactive learning journey. We've organized them by their primary learning paradigm.</p>
-            </div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-24">
+                {/* Hero Section */}
+                <section className="text-center space-y-8 py-12">
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="inline-block px-4 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
+                  >
+                    Interactive Learning Platform
+                  </motion.div>
+                  <h1 className="text-6xl md:text-7xl font-bold tracking-tight max-w-4xl mx-auto leading-[1.1]">
+                    Master Machine Learning through <span className="text-emerald-600">Experimentation.</span>
+                  </h1>
+                  <p className="text-xl text-black/50 max-w-2xl mx-auto leading-relaxed">
+                    Select an algorithm, pick a dataset, and watch the model learn in real-time. No code required, just pure intuition.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                    <button 
+                      onClick={() => {
+                        const el = document.getElementById('algo-selection');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="px-8 py-4 bg-black text-white rounded-2xl font-bold hover:bg-black/80 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2"
+                    >
+                      Explore Algorithms <ArrowRight className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => setShowAbout(true)}
+                      className="px-8 py-4 bg-white border border-black/10 text-black rounded-2xl font-bold hover:bg-stone-50 transition-all"
+                    >
+                      How it Works
+                    </button>
+                  </div>
+                </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {['Supervised Learning', 'Unsupervised Learning'].map((category) => (
-                <div key={category} className="space-y-6">
-                  <h3 className="text-xs uppercase tracking-widest font-bold text-black/40 border-b border-black/10 pb-2">{category}</h3>
-                  {category === 'Supervised Learning' ? (
-                    <>
-                      <div className="space-y-4">
-                        <h4 className="font-serif italic text-lg opacity-70">Regression</h4>
-                        <div className="space-y-2">
-                          {ALGORITHMS.filter(a => a.type === 'Regression').map(algo => (
-                            <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
-                          ))}
-                        </div>
+                {/* Feature Grid */}
+                <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {[
+                    { icon: <Activity className="w-6 h-6" />, title: "Real-time Feedback", desc: "See how metrics change instantly as you tune hyperparameters." },
+                    { icon: <BarChart2 className="w-6 h-6" />, title: "Visual Analytics", desc: "Interactive charts and decision boundaries to build intuition." },
+                    { icon: <Layers className="w-6 h-6" />, title: "Full Pipeline", desc: "From data exploration to final evaluation and comparison." }
+                  ].map((feature, i) => (
+                    <div key={i} className="p-8 bg-white rounded-[2rem] border border-black/5 shadow-sm hover:shadow-md transition-all">
+                      <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
+                        {feature.icon}
                       </div>
-                      <div className="space-y-4">
-                        <h4 className="font-serif italic text-lg opacity-70">Classification</h4>
-                        <div className="space-y-2">
-                          {ALGORITHMS.filter(a => a.type === 'Classification').map(algo => (
-                            <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <h4 className="font-serif italic text-lg opacity-70">Clustering</h4>
-                      <div className="space-y-2">
-                        {ALGORITHMS.filter(a => a.type === 'Clustering').map(algo => (
-                          <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
-                        ))}
-                      </div>
+                      <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
+                      <p className="text-sm text-black/50 leading-relaxed">{feature.desc}</p>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
+                  ))}
+                </section>
+
+                {/* Algorithm Selection */}
+                <section id="algo-selection" className="space-y-12 pt-12">
+                  <div className="text-center space-y-4">
+                    <h2 className="text-4xl font-bold tracking-tight">Choose Your Learning Path</h2>
+                    <p className="text-black/50 max-w-xl mx-auto">Select a learning paradigm to begin your journey. We've organized them by their primary function.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {['Supervised Learning', 'Unsupervised Learning'].map((category) => (
+                      <div key={category} className={`space-y-6 ${category === 'Supervised Learning' ? 'md:col-span-2' : ''}`}>
+                        <h3 className="text-xs uppercase tracking-widest font-bold text-black/40 border-b border-black/10 pb-2">{category}</h3>
+                        
+                        {category === 'Supervised Learning' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                            <div className="space-y-4">
+                              <h4 className="font-serif italic text-lg opacity-70">Regression</h4>
+                              <div className="space-y-2">
+                                {ALGORITHMS.filter(a => a.type === 'Regression').map(algo => (
+                                  <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
+                                ))}
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <h4 className="font-serif italic text-lg opacity-70">Classification</h4>
+                              <div className="space-y-2">
+                                {ALGORITHMS.filter(a => a.type === 'Classification').map(algo => (
+                                  <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <h4 className="font-serif italic text-lg opacity-70">Clustering</h4>
+                            <div className="space-y-2">
+                              {ALGORITHMS.filter(a => a.type === 'Clustering').map(algo => (
+                                <AlgoButton key={algo.id} algo={algo} onClick={() => handleAlgoSelect(algo)} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </motion.div>
+            )}
 
         {step === 1 && selectedAlgo && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
@@ -1353,12 +1435,17 @@ export default function App() {
                 <div className="bg-white p-8 rounded-3xl border border-black/5 shadow-sm h-[400px]">
                   <h4 className="text-xs font-bold uppercase text-black/40 mb-6">Feature Importance</h4>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart layout="vertical" data={featureImportance} margin={{ left: 40 }}>
+                    <BarChart layout="vertical" data={featureImportance} margin={{ left: 40, right: 40 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                      <XAxis type="number" hide />
+                      <XAxis type="number" hide domain={[0, 'auto']} />
                       <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
+                      <Tooltip formatter={(value: number) => [value.toFixed(4), 'Importance']} />
+                      <Bar 
+                        dataKey="value" 
+                        fill="#10b981" 
+                        radius={[0, 4, 4, 0]} 
+                        label={{ position: 'right', fontSize: 10, fill: '#666', formatter: (v: number) => v > 0 ? v.toFixed(2) : '' }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1389,8 +1476,9 @@ export default function App() {
                           if (evaluation.classes) {
                             fill = entry.pred === evaluation.classes[0] ? '#10b981' : entry.pred === evaluation.classes[1] ? '#3b82f6' : '#f59e0b';
                           } else {
-                            const min = Math.min(...decisionBoundary.grid.map((g: any) => g.pred));
-                            const max = Math.max(...decisionBoundary.grid.map((g: any) => g.pred));
+                            const preds = decisionBoundary.grid.map((g: any) => g.pred);
+                            const min = preds.length > 0 ? Math.min(...preds) : 0;
+                            const max = preds.length > 0 ? Math.max(...preds) : 1;
                             const range = max - min;
                             const normalized = range === 0 ? 0.5 : (entry.pred - min) / range;
                             fill = `rgba(16, 185, 129, ${normalized})`;
@@ -1412,8 +1500,9 @@ export default function App() {
                           if (evaluation.classes) {
                             fill = entry[target] === evaluation.classes[0] ? '#065f46' : entry[target] === evaluation.classes[1] ? '#1e40af' : '#92400e';
                           } else {
-                            const min = Math.min(...selectedDataset.data.map(d => parseFloat(d[target])));
-                            const max = Math.max(...selectedDataset.data.map(d => parseFloat(d[target])));
+                            const targetValues = selectedDataset.data.map(d => parseFloat(d[target]));
+                            const min = targetValues.length > 0 ? Math.min(...targetValues) : 0;
+                            const max = targetValues.length > 0 ? Math.max(...targetValues) : 1;
                             const range = max - min;
                             const normalized = range === 0 ? 0.5 : (parseFloat(entry[target]) - min) / range;
                             fill = `rgba(6, 95, 70, ${normalized})`;
@@ -1521,7 +1610,8 @@ export default function App() {
                       <tbody>
                         {comparisonModels.filter(m => m.datasetId === selectedDataset.id).map((m, i) => {
                           const currentDatasetModels = comparisonModels.filter(mod => mod.datasetId === selectedDataset.id);
-                          const bestAcc = Math.max(...currentDatasetModels.map(mod => mod.metrics.accuracy || mod.metrics.r2));
+                          const accs = currentDatasetModels.map(mod => mod.metrics.accuracy || mod.metrics.r2);
+                          const bestAcc = accs.length > 0 ? Math.max(...accs) : 0;
                           const isBest = (m.metrics.accuracy || m.metrics.r2) === bestAcc;
                           
                           return (

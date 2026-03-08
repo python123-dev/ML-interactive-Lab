@@ -29,7 +29,16 @@ export const trainModel = (
   target?: string,
   options: any = {}
 ): TrainingResult => {
-  let X = data.map(row => features.map(f => parseFloat(row[f])));
+  if (!data || data.length === 0) {
+    throw new Error('Training data must not be empty');
+  }
+  let X = data.map(row => features.map(f => {
+    const val = parseFloat(row[f]);
+    return isNaN(val) ? 0 : val;
+  }));
+  if (X.length === 0 || X[0].length === 0) {
+    throw new Error('Training features must not be empty');
+  }
   
   // Feature Scaling
   let scalingParams: { means: number[], stds: number[] } | null = null;
@@ -49,43 +58,55 @@ export const trainModel = (
     let result: any;
     if (algorithmId === 'kmeans') {
       const k = options.k || 3;
-      result = kmeans(X, k, {});
+      if (X.length > 0 && X[0].length > 0) {
+        result = kmeans(X, k, {});
+      } else {
+        result = { clusters: new Array(X.length).fill(0), centroids: [] };
+      }
     } else if (algorithmId === 'hierarchical-clustering') {
-      const cluster = agnes(X, {
-        method: 'ward'
-      });
-      const k = options.k || 3;
-      const root = cluster.group(k);
-      const labels = new Array(X.length).fill(0);
-      root.children.forEach((child, clusterIndex) => {
-        child.indices().forEach(pointIndex => {
-          labels[pointIndex] = clusterIndex;
+      if (X.length > 0 && X[0].length > 0) {
+        const cluster = agnes(X, {
+          method: 'ward'
         });
-      });
-      // Calculate centroids for prediction
-      const centroids = new Array(k).fill(0).map(() => new Array(features.length).fill(0));
-      const counts = new Array(k).fill(0);
-      labels.forEach((clusterIdx, pointIdx) => {
-        counts[clusterIdx]++;
-        features.forEach((_, fIdx) => {
-          centroids[clusterIdx][fIdx] += X[pointIdx][fIdx];
+        const k = options.k || 3;
+        const root = cluster.group(k);
+        const labels = new Array(X.length).fill(0);
+        root.children.forEach((child, clusterIndex) => {
+          child.indices().forEach(pointIndex => {
+            labels[pointIndex] = clusterIndex;
+          });
         });
-      });
-      centroids.forEach((centroid, i) => {
-        if (counts[i] > 0) {
-          centroid.forEach((_, j) => centroid[j] /= counts[i]);
-        }
-      });
+        // Calculate centroids for prediction
+        const centroids = new Array(k).fill(0).map(() => new Array(features.length).fill(0));
+        const counts = new Array(k).fill(0);
+        labels.forEach((clusterIdx, pointIdx) => {
+          counts[clusterIdx]++;
+          features.forEach((_, fIdx) => {
+            centroids[clusterIdx][fIdx] += X[pointIdx][fIdx];
+          });
+        });
+        centroids.forEach((centroid, i) => {
+          if (counts[i] > 0) {
+            centroid.forEach((_, j) => centroid[j] /= counts[i]);
+          }
+        });
 
-      result = {
-        clusters: labels,
-        centroids: centroids,
-        algorithmId: 'hierarchical-clustering'
-      };
+        result = {
+          clusters: labels,
+          centroids: centroids,
+          algorithmId: 'hierarchical-clustering'
+        };
+      } else {
+        result = { clusters: new Array(X.length).fill(0), centroids: [] };
+      }
     } else {
       // Placeholder for DBSCAN
       const k = options.k || 3;
-      result = kmeans(X, k, {});
+      if (X.length > 0 && X[0].length > 0) {
+        result = kmeans(X, k, {});
+      } else {
+        result = { clusters: new Array(X.length).fill(0), centroids: [] };
+      }
     }
 
     return {
@@ -112,15 +133,19 @@ export const trainModel = (
 
   if (isClassification) {
     y = targetValues.map(val => {
-      if (targetMap[val] === undefined) {
+      const stringVal = val === null || val === undefined ? 'undefined' : String(val);
+      if (targetMap[stringVal] === undefined) {
         const id = Object.keys(targetMap).length;
-        targetMap[val] = id;
-        reverseTargetMap[id] = val;
+        targetMap[stringVal] = id;
+        reverseTargetMap[id] = stringVal;
       }
-      return targetMap[val];
+      return targetMap[stringVal];
     });
   } else {
-    y = targetValues.map(val => parseFloat(val));
+    y = targetValues.map(val => {
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+    });
   }
 
   let model: any;
@@ -131,13 +156,23 @@ export const trainModel = (
         numSteps: options.numSteps || 1000,
         learningRate: options.learningRate || 0.01
       });
-      model.train(new Matrix(X), Matrix.columnVector(y));
-      // Expose weights for visualization
-      (model as any).weights = model.classifiers[0].weights.to1DArray();
+      if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+        model.train(new Matrix(X), Matrix.columnVector(y));
+        // Expose weights for visualization
+        if (model.classifiers && model.classifiers[0] && model.classifiers[0].weights) {
+          (model as any).weights = model.classifiers[0].weights.to1DArray();
+        } else {
+          (model as any).weights = new Array(X[0].length).fill(0);
+        }
+      }
       break;
     case 'linear-regression':
     case 'multiple-linear-regression':
-      model = new MLR(X, y.map(val => [val]));
+      if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+        model = new MLR(X, y.map(val => [val]));
+      } else {
+        model = { predict: () => [0] };
+      }
       break;
     case 'polynomial-regression':
       // Simple polynomial expansion
@@ -149,38 +184,61 @@ export const trainModel = (
         }
         return newRow;
       });
-      model = new MLR(polyX, y.map(val => [val]));
-      // Wrap model to handle prediction expansion
-      const originalPredict = model.predict.bind(model);
-      model.predict = (input: number[][]) => {
-        const expandedInput = input.map(row => {
-          const newRow = [...row];
-          for (let d = 2; d <= degree; d++) {
-            row.forEach(val => newRow.push(Math.pow(val, d)));
-          }
-          return newRow;
-        });
-        return originalPredict(expandedInput);
-      };
+      if (polyX.length > 0 && polyX[0].length > 0 && y.length > 0) {
+        model = new MLR(polyX, y.map(val => [val]));
+        // Wrap model to handle prediction expansion
+        const originalPredict = model.predict.bind(model);
+        model.predict = (input: number[][]) => {
+          const expandedInput = input.map(row => {
+            const newRow = [...row];
+            for (let d = 2; d <= degree; d++) {
+              row.forEach(val => newRow.push(Math.pow(val, d)));
+            }
+            return newRow;
+          });
+          return originalPredict(expandedInput);
+        };
+      } else {
+        model = { predict: () => [0] };
+      }
       break;
     case 'knn':
-      model = new KNN(X, y, { k: options.k || 3 });
+      if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+        model = new KNN(X, y, { k: options.k || 3 });
+      } else {
+        model = { predict: () => [0] };
+      }
       break;
     case 'decision-tree':
       model = new DecisionTreeClassifier({
         maxDepth: options.maxDepth || 10,
         minSamplesLeaf: options.minSamplesLeaf || 1
       });
-      model.train(X, y);
+      if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+        model.train(X, y);
+      }
       break;
     case 'random-forest':
-      model = new RandomForestClassifier({
-        nEstimators: options.nEstimators || 10,
-        treeOptions: {
-          maxDepth: options.maxDepth || 10
+      try {
+        const nEstimators = Math.max(1, parseInt(String(options.nEstimators)) || 20);
+        const maxDepth = Math.max(1, parseInt(String(options.maxDepth)) || 10);
+        model = new RandomForestClassifier({
+          nEstimators,
+          treeOptions: {
+            maxDepth,
+            minSamplesLeaf: options.minSamplesLeaf || 1
+          }
+        });
+        if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+          // ml-random-forest works best with Matrix or well-formatted arrays
+          model.train(new Matrix(X), y);
+        } else {
+          model = { predict: (input: number[][]) => input.map(() => 0), featureImportance: () => new Array(features.length).fill(0) };
         }
-      });
-      model.train(X, y);
+      } catch (e) {
+        console.error('Random Forest training failed:', e);
+        model = { predict: (input: number[][]) => input.map(() => 0), featureImportance: () => new Array(features.length).fill(0) };
+      }
       break;
     case 'svm':
       // ml-svm is binary, so we implement One-Vs-All for multi-class support
@@ -192,14 +250,17 @@ export const trainModel = (
           ...options
         });
         const binaryY = y.map(val => val === cls ? 1 : -1);
-        svm.train(X, binaryY);
+        if (X.length > 0 && X[0].length > 0 && binaryY.length > 0) {
+          svm.train(X, binaryY);
+        }
         return { cls, svm };
       });
       
       const supportVectors: any[] = [];
       classifiers.forEach(({ svm }) => {
-        if ((svm as any).supportVectors) {
-          supportVectors.push(...(svm as any).supportVectors);
+        const sv = (svm as any).supportVectors;
+        if (Array.isArray(sv)) {
+          supportVectors.push(...sv);
         }
       });
 
@@ -224,7 +285,11 @@ export const trainModel = (
       break;
     default:
       // Fallback or placeholder for unimplemented ones
-      model = new MLR(X, y.map(val => [val]));
+      if (X.length > 0 && X[0].length > 0 && y.length > 0) {
+        model = new MLR(X, y.map(val => [val]));
+      } else {
+        model = { predict: () => [0] };
+      }
   }
 
   return {
@@ -246,6 +311,7 @@ export const crossValidate = (
   options: any = {},
   kFolds: number = 5
 ) => {
+  if (!Array.isArray(data)) return { avgMetrics: {}, folds: [] };
   const shuffled = [...data].sort(() => Math.random() - 0.5);
   const foldSize = Math.floor(shuffled.length / kFolds);
   const results = [];
@@ -263,6 +329,7 @@ export const crossValidate = (
 
   // Average metrics
   const avgMetrics: any = {};
+  if (results.length === 0) return { avgMetrics, folds: [] };
   const keys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
   keys.forEach(key => {
     avgMetrics[key] = results.reduce((sum, r) => sum + r[key], 0) / kFolds;
@@ -273,6 +340,7 @@ export const crossValidate = (
 
 export const generateROCData = (trainedModel: any, testData: any[], features: string[], target: string) => {
   if (trainedModel.type !== 'classification') return null;
+  if (!Array.isArray(testData)) return null;
   
   const classes = Object.keys(trainedModel.targetMap);
   if (classes.length !== 2) return null; // ROC is typically for binary
@@ -320,6 +388,7 @@ export const generateLearningCurveData = (
   target: string,
   options: any = {}
 ) => {
+  if (!Array.isArray(data)) return [];
   const shuffled = [...data].sort(() => Math.random() - 0.5);
   const testSize = Math.floor(shuffled.length * 0.2);
   const testData = shuffled.slice(0, testSize);
@@ -373,6 +442,7 @@ export const generateBiasVarianceData = (
   paramName: string,
   paramValues: number[]
 ) => {
+  if (!Array.isArray(data)) return [];
   const shuffled = [...data].sort(() => Math.random() - 0.5);
   const splitIdx = Math.floor(shuffled.length * 0.8);
   const trainData = shuffled.slice(0, splitIdx);
@@ -500,6 +570,7 @@ export const predict = (trainedModel: any, input: number[]) => {
   if (type === 'classification') {
     let prediction;
     if (algorithmId === 'logistic-regression') {
+      if (processedInput.length === 0) return 0;
       prediction = model.predict(new Matrix([processedInput]))[0];
     } else if (algorithmId === 'svm') {
       // Our custom SVM wrapper returns an array for predict
@@ -515,6 +586,11 @@ export const predict = (trainedModel: any, input: number[]) => {
 };
 
 export const evaluate = (trainedModel: any, testData: any[], features: string[], target: string) => {
+  if (!testData || testData.length === 0) {
+    return trainedModel.type === 'classification' 
+      ? { accuracy: 0, precision: 0, recall: 0, f1: 0, confusionMatrix: [], classes: [] }
+      : { mse: 0, mae: 0, r2: 0 };
+  }
   const X_test = testData.map(row => features.map(f => parseFloat(row[f])));
   
   if (trainedModel.type === 'clustering') {
@@ -538,6 +614,11 @@ export const evaluate = (trainedModel: any, testData: any[], features: string[],
   }
 
   const y_test = testData.map(row => row[target]);
+  if (y_test.length === 0) {
+    return trainedModel.type === 'classification' 
+      ? { accuracy: 0, precision: 0, recall: 0, f1: 0, confusionMatrix: [], classes: [] }
+      : { mse: 0, mae: 0, r2: 0 };
+  }
   
   const predictions = X_test.map(x => predict(trainedModel, x));
   
@@ -611,7 +692,43 @@ export const getFeatureImportance = (trainedModel: any) => {
   let importances: number[] = [];
 
   if (algorithmId === 'random-forest') {
-    importances = model.featureImportance();
+    try {
+      let rawImportances;
+      if (typeof model.featureImportance === 'function') {
+        rawImportances = model.featureImportance();
+      } else if (typeof model.getFeatureImportance === 'function') {
+        rawImportances = model.getFeatureImportance();
+      }
+
+      // If built-in returns zeros or is not an array, try manual calculation from individual trees
+      if (Array.isArray(rawImportances) && rawImportances.some(v => v > 0)) {
+        importances = rawImportances;
+      } else {
+        importances = new Array(features.length).fill(0);
+        const trees = model.models || model.estimators || [];
+        if (Array.isArray(trees) && trees.length > 0) {
+          trees.forEach((tree: any) => {
+            const traverse = (node: any) => {
+              if (!node || node.splitColumn === undefined) return;
+              // Use gain if available, otherwise use 1 as a proxy for split count
+              const weight = (typeof node.gain === 'number' && node.gain > 0) ? node.gain : 1;
+              importances[node.splitColumn] += weight;
+              traverse(node.left);
+              traverse(node.right);
+            };
+            traverse(tree.root);
+          });
+          
+          const sum = importances.reduce((a, b) => a + b, 0);
+          if (sum > 0) {
+            importances = importances.map(v => v / sum);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get Random Forest importance:', e);
+      importances = new Array(features.length).fill(0);
+    }
   } else if (algorithmId === 'decision-tree') {
     // Decision tree importance is simpler, but we can extract it
     importances = new Array(features.length).fill(0);
