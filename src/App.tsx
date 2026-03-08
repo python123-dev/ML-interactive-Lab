@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ChevronRight, Database, Settings, Play, BarChart2, RefreshCw, HelpCircle, 
   Info, AlertTriangle, CheckCircle2, ArrowRight, Layers, Cpu, Zap, 
-  TrendingUp, Target, Activity, Microscope
+  TrendingUp, Target, Activity, Microscope, BookOpen, Github
 } from 'lucide-react';
 import { ALGORITHMS, AlgorithmInfo, Dataset, Hyperparameter, HistoryItem } from './types';
 import { FULL_DATASETS } from './datasets';
@@ -52,6 +52,7 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showDocumentation, setShowDocumentation] = useState(false);
 
   // Comparison Mode State
   const [comparisonModels, setComparisonModels] = useState<any[]>([]);
@@ -59,7 +60,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [step, showHistory, showAbout]);
+  }, [step, showHistory, showAbout, showDocumentation]);
 
   useEffect(() => {
     fetchHistory();
@@ -345,7 +346,11 @@ export default function App() {
             ))}
             <div className="w-px h-4 bg-black/10 mx-2" />
             <button 
-              onClick={() => setShowHistory(!showHistory)}
+              onClick={() => {
+                setShowHistory(!showHistory);
+                setShowAbout(false);
+                setShowDocumentation(false);
+              }}
               className={`text-sm font-bold uppercase tracking-widest transition-colors ${showHistory ? 'text-emerald-600' : 'text-black/40 hover:text-emerald-500'}`}
             >
               Notebook
@@ -472,6 +477,8 @@ export default function App() {
               </section>
             </div>
           </motion.div>
+        ) : showDocumentation ? (
+          <DocumentationView onClose={() => setShowDocumentation(false)} />
         ) : showHistory ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-2 text-emerald-600 mb-8 cursor-pointer hover:underline" onClick={() => setShowHistory(false)}>
@@ -1745,16 +1752,36 @@ export default function App() {
             <div className="w-6 h-6 bg-black rounded flex items-center justify-center text-white text-[10px] font-bold">ML</div>
             <span className="text-xs font-medium">Interactive Lab © 2026</span>
           </div>
-          <div className="flex gap-8 text-xs font-bold uppercase tracking-widest text-black/30">
-            <a href="#" className="hover:text-emerald-600 transition-colors">Documentation</a>
-            <a href="#" className="hover:text-emerald-600 transition-colors">Github</a>
+          <div className="flex flex-wrap justify-center md:justify-end gap-4 text-xs font-bold uppercase tracking-widest">
+            <button 
+              onClick={() => {
+                setShowDocumentation(true);
+                setShowAbout(false);
+                setShowHistory(false);
+              }}
+              className="px-6 py-3 bg-black/5 hover:bg-emerald-600 hover:text-white rounded-xl transition-all flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4" />
+              Documentation
+            </button>
+            <a 
+              href="https://github.com/python123-dev" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-black/5 hover:bg-emerald-600 hover:text-white rounded-xl transition-all flex items-center gap-2"
+            >
+              <Github className="w-4 h-4" />
+              Github
+            </a>
             <button 
               onClick={() => {
                 setShowAbout(true);
+                setShowDocumentation(false);
                 setShowHistory(false);
               }} 
-              className="hover:text-emerald-600 transition-colors uppercase"
+              className="px-6 py-3 bg-black/5 hover:bg-emerald-600 hover:text-white rounded-xl transition-all flex items-center gap-2"
             >
+              <Info className="w-4 h-4" />
               About
             </button>
           </div>
@@ -1763,6 +1790,86 @@ export default function App() {
     </div>
   );
 }
+
+const DocumentationView = ({ onClose }: { onClose: () => void }) => {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+      <div className="flex items-center gap-2 text-emerald-600 mb-12 cursor-pointer hover:underline" onClick={onClose}>
+        <ChevronRight className="rotate-180 w-4 h-4" />
+        <span className="text-sm font-medium">Back to Lab</span>
+      </div>
+      
+      <div className="space-y-16">
+        <section>
+          <h2 className="text-5xl font-bold tracking-tight mb-8">Documentation</h2>
+          <p className="text-xl text-black/60 leading-relaxed">
+            Welcome to the ML Interactive Lab documentation. This guide will help you understand how to use the platform to explore machine learning concepts.
+          </p>
+        </section>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="p-8 bg-white rounded-[2rem] border border-black/5 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6">
+              <Layers className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-4">1. Select Algorithm</h3>
+            <p className="text-sm text-black/50 leading-relaxed">
+              Choose from various machine learning algorithms like Linear Regression, Decision Trees, or Random Forests. Each algorithm has its own strengths and use cases.
+            </p>
+          </div>
+
+          <div className="p-8 bg-white rounded-[2rem] border border-black/5 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-6">
+              <Database className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-4">2. Choose Dataset</h3>
+            <p className="text-sm text-black/50 leading-relaxed">
+              Pick a dataset to train your model on. We provide classic datasets like Iris, Wine, and Breast Cancer, or you can use synthetic data for simpler experiments.
+            </p>
+          </div>
+
+          <div className="p-8 bg-white rounded-[2rem] border border-black/5 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mb-6">
+              <Settings className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-4">3. Configure Features</h3>
+            <p className="text-sm text-black/50 leading-relaxed">
+              Select which features to include in your model and choose preprocessing steps like scaling or cross-validation to improve performance.
+            </p>
+          </div>
+
+          <div className="p-8 bg-white rounded-[2rem] border border-black/5 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mb-6">
+              <Activity className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-4">4. Evaluate Results</h3>
+            <p className="text-sm text-black/50 leading-relaxed">
+              After training, analyze performance metrics like Accuracy, MSE, or R² score. Use the interactive visualizations to understand how your model makes predictions.
+            </p>
+          </div>
+        </div>
+
+        <section className="bg-stone-900 text-white p-12 rounded-[3rem]">
+          <h3 className="text-2xl font-bold mb-6">Pro Tips</h3>
+          <ul className="space-y-4">
+            <li className="flex gap-4">
+              <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 text-[10px] font-bold">1</div>
+              <p className="text-white/60 text-sm">Use <strong>Scaling</strong> when working with algorithms that are sensitive to feature magnitude, like KNN or SVM.</p>
+            </li>
+            <li className="flex gap-4">
+              <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 text-[10px] font-bold">2</div>
+              <p className="text-white/60 text-sm">Enable <strong>Cross-Validation</strong> for a more reliable estimate of model performance on unseen data.</p>
+            </li>
+            <li className="flex gap-4">
+              <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 text-[10px] font-bold">3</div>
+              <p className="text-white/60 text-sm">Check the <strong>Feature Importance</strong> chart to see which variables are driving your model's decisions.</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </motion.div>
+  );
+};
 
 function FlowStep({ icon, label, active }: { icon: React.ReactNode, label: string, active?: boolean }) {
   return (
